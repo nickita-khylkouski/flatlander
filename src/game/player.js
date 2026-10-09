@@ -43,9 +43,10 @@ export class Player {
     return true;
   }
 
-  damage(n, kb = 0) {
+  damage(n, kb = 0, cause = '') {
     if (this.dead || n <= 0) return false;
     this.hp = Math.max(0, this.hp - n);
+    this.lastCause = cause;
     this.hurtTimer = 0.35; this.sinceHurt = 0;
     if (kb) { this.vu = kb; this.vy = Math.max(this.vy, 5); }
     if (this.hp <= 0) this.dead = true;
@@ -66,8 +67,8 @@ export class Player {
     this.headInWater = head;
 
     this.cactusCd -= dt; this.lavaCd -= dt;
-    if (cactus && this.cactusCd <= 0) { this.cactusCd = 0.5; if (this.damage(4)) events.push('hurt'); }
-    if (lava && this.lavaCd <= 0) { this.lavaCd = 0.5; if (this.damage(12)) events.push('hurt'); }
+    if (cactus && this.cactusCd <= 0) { this.cactusCd = 0.5; if (this.damage(4, 0, 'cactus')) events.push('hurt'); }
+    if (lava && this.lavaCd <= 0) { this.lavaCd = 0.5; if (this.damage(12, 0, 'lava')) events.push('hurt'); }
 
     // horizontal
     const speed = (input.sprint ? 6.2 : 4.4) * (this.inWater ? 0.55 : 1);
@@ -102,7 +103,7 @@ export class Player {
         this.onGround = true;
         if (wasVy < -15.5 && !this.inWater) {
           const dmg = Math.round((-wasVy - 15.5) * 3.2);
-          if (this.damage(dmg)) events.push('hurt');
+          if (this.damage(dmg, 0, 'fall')) events.push('hurt');
         }
       }
       this.vy = 0;
@@ -113,7 +114,7 @@ export class Player {
     if (this.collides(world, this.x, this.y, this.z)) {
       for (let k = 1; k < 4; k++) if (!this.collides(world, this.x, this.y + k, this.z)) { this.y += k; break; }
     }
-    if (this.y < -20) { this.damage(1000); }
+    if (this.y < -20) { this.damage(1000, 0, 'void'); }
 
     this.hurtTimer = Math.max(0, this.hurtTimer - dt);
     this.sinceHurt += dt;

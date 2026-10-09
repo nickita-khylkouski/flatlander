@@ -91,3 +91,22 @@ test('the flatlander collides with blocks cut by its slice, not ones beside it',
   assert.equal(p.collides(w, p.x, p.y, p.z), false, 'stone is one block off-slice');
   assert.equal(p.collides(w, p.x, p.y, p.z, Math.PI / 2), true, 'rotating 90° sweeps through it');
 });
+
+test('canFitAll checks a whole list of drops without changing the inventory', () => {
+  const inv = new Inventory(2);
+  inv.add(B.DIRT, 60);
+  assert.equal(inv.canFitAll([[B.DIRT, 4], [B.SAND, 64]]), true);
+  assert.equal(inv.canFitAll([[B.DIRT, 5], [B.SAND, 64]]), false);
+  assert.equal(inv.count(B.DIRT), 60);
+  assert.equal(inv.count(B.SAND), 0);
+});
+
+test('damage remembers what killed you', () => {
+  const p = new Player(0, 80, 0);
+  p.damage(30, 0, 'cactus');
+  assert.equal(p.dead, false);
+  p.damage(500, 0, 'lava');
+  assert.equal(p.dead, true);
+  assert.equal(p.lastCause, 'lava');
+  assert.equal(p.damage(10, 0, 'fall'), false, 'no damage after death');
+});

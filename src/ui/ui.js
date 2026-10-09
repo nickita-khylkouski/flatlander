@@ -144,12 +144,20 @@ export class UI {
     $('chestbox').classList.toggle('hidden', !chestSlots);
     this.refresh();
   }
-  close() {
-    if (this.cursor) { this.g.inv.add(this.cursor.id, this.cursor.count); this.cursor = null; }
+  close(force = false) {
+    if (this.cursor) { // put the held stack back; never let it vanish
+      let left = this.g.inv.add(this.cursor.id, this.cursor.count);
+      if (left && this.chest) {
+        for (let i = 0; i < this.chest.length && left; i++) if (!this.chest[i]) { this.chest[i] = { id: this.cursor.id, count: left }; left = 0; }
+      }
+      if (left && !force) { this.cursor.count = left; this.g.toastText('No room for the held item: place it or trash it'); this.refresh(); return false; }
+      this.cursor = null;
+    }
     this.isOpen = false; this.chest = null;
     $('inv').classList.add('hidden');
     this.hideTip();
     this.refresh();
+    return true;
   }
 
   refresh() {

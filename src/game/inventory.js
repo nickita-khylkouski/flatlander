@@ -36,6 +36,12 @@ export class Inventory {
     return room >= n;
   }
 
+  canFitAll(list) { // [[id, n], ...]
+    const sim = new Inventory(this.slots.length);
+    sim.slots = this.slots.map((s) => s && { ...s });
+    return list.every(([id, n]) => sim.add(id, n) === 0);
+  }
+
   count(id) {
     let n = 0;
     for (const s of this.slots) if (s && s.id === id) n += s.count;

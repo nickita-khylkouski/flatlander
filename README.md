@@ -9,6 +9,7 @@ Turn your slice through the third dimension to explore, mine, craft and survive.
 
 [**▶ Play in your browser**](https://nickitakhy.me/flatlander/) · [How it works](#how-it-works) · [Run locally](#run-locally)
 
+[![CI](https://github.com/nickita-khylkouski/flatlander/actions/workflows/ci.yml/badge.svg)](https://github.com/nickita-khylkouski/flatlander/actions/workflows/ci.yml)
 ![WebGL2](https://img.shields.io/badge/WebGL2-shader%20rendered-6a3fd1)
 ![No build step](https://img.shields.io/badge/build%20step-none-2ea44f)
 ![Dependencies](https://img.shields.io/badge/dependencies-0-2ea44f)

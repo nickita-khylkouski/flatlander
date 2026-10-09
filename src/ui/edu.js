@@ -59,7 +59,7 @@ export class Edu {
     this.idx = 0;
     this.dismissed = false;
     this.mathT = 0;
-    this.card.addEventListener('mousedown', (e) => e.stopPropagation());
+    this.card.addEventListener('mousedown', (e) => { e.stopPropagation(); if (e.target.closest('button')) e.preventDefault(); }); // buttons must not keep focus (Space would press them)
     this.math.addEventListener('mousedown', (e) => { e.stopPropagation(); this.math.classList.toggle('min'); });
     this.card.querySelector('.next').addEventListener('click', () => this.next());
     this.card.querySelector('.skip').addEventListener('click', () => this.toggle());
@@ -88,7 +88,7 @@ export class Edu {
     this.card.classList.toggle('hidden', !show);
     if (!show) return;
     if (force || this.shownId !== L.id) {
-      this.shownId = L.id;
+      this.shownId = L.id; force = true;
       this.card.querySelector('.ltitle').innerHTML = `<span class="lnum">Lesson ${this.idx + 1}/${LESSONS.length}</span> ${L.title}`;
       this.card.querySelector('.ltext').innerHTML = L.text;
     }
@@ -97,11 +97,16 @@ export class Edu {
     if (L.task) {
       const [cur, goal, label] = L.task(this.g);
       const done = cur >= goal;
-      tEl.innerHTML = `${done ? '✔' : '▸'} <b>Try it:</b> ${label} <span class="lprog">${goal > 1 ? `${Math.min(cur, goal)}/${goal}` : ''}</span>`;
-      tEl.classList.toggle('done', done);
-      btn.textContent = done ? 'Next lesson →' : 'Next →';
-      btn.classList.toggle('ready', done);
-    } else {
+      const html = `${done ? '✔' : '▸'} <b>Try it:</b> ${label} <span class="lprog">${goal > 1 ? `${Math.min(cur, goal)}/${goal}` : ''}</span>`;
+      if (html !== this.taskHtml || force) { // runs every frame: only touch the DOM when something changed
+        this.taskHtml = html;
+        tEl.innerHTML = html;
+        tEl.classList.toggle('done', done);
+        btn.textContent = done ? 'Next lesson →' : 'Next →';
+        btn.classList.toggle('ready', done);
+      }
+    } else if (force || this.taskHtml !== '') {
+      this.taskHtml = '';
       tEl.innerHTML = '';
       btn.textContent = this.idx + 1 >= LESSONS.length ? 'Finish ✔' : 'Next lesson →';
       btn.classList.add('ready');
@@ -133,7 +138,7 @@ export class Edu {
     if (m) {
       html += `<div class="hov">${m.name}: sphere r = ${m.R.toFixed(2)}, d = ${Math.abs(m.w).toFixed(2)}<br>circle you see: √(r² − d²) = <b>${m.r.toFixed(2)}</b></div>`;
     }
-    this.math.innerHTML = html;
+    if (html !== this.mathHtml) this.math.innerHTML = this.mathHtml = html;
   }
 }
 

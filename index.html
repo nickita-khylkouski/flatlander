@@ -72,8 +72,8 @@
       <div id="recipes"></div>
     </div>
   </div>
-  <div id="tooltip" class="hidden"></div>
 </div>
+<div id="tooltip" class="hidden"></div>
 <div id="cursorItem" class="hidden"></div>
 
 <div id="menu" class="screen">
@@ -87,6 +87,7 @@
     <label class="opt big"><input type="checkbox" id="optEdu" checked> <span><b>Educational mode</b><br><span class="muted">split screen with the real 3D world, live math, and short lessons on how slices work</span></span></label>
     <label class="opt">Difficulty <select id="optDiff"><option value="peaceful">Peaceful: spiders don't attack</option><option value="normal" selected>Normal</option><option value="hard">Hard: more spiders, more damage</option></select></label>
     <button id="btnHow">How to Play</button>
+    <div id="touchnote" class="hidden muted">Flatlander is played with a keyboard and mouse (or trackpad).</div>
   </div>
   <div id="how" class="hidden howbox">
     <p>You are a <b>2D being in a 3D world</b>.</p>
@@ -128,7 +129,7 @@
   <div class="menubox">
     <div class="title2 red">You were flattened.</div>
     <div class="muted" id="deathmsg"></div>
-    <button id="btnRespawn">Respawn</button>
+    <button id="btnRespawn">Respawn <span class="muted">(Enter)</span></button>
   </div>
 </div>
 

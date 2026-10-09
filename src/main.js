@@ -19,12 +19,19 @@ const REACH = 5.2, ATTACK_REACH = 3.6;
 const ROT_STEP = Math.PI / 12; // 15° per wheel notch
 const DIFF = { peaceful: { spiders: 0.6, dmg: 0 }, normal: { spiders: 1, dmg: 1 }, hard: { spiders: 1.6, dmg: 1.5 } };
 const DEMO_SEED = 1234;
+const DEATH_MSG = {
+  spider: 'A phase spider got you.', jelly: 'Stung by a jellyfish.', fall: 'You hit the ground too hard.',
+  lava: 'You tried to swim in lava.', cactus: 'You hugged a cactus.', void: 'You fell out of the world.',
+};
 const SETTINGS_KEY = 'flatlander.settings.v1';
 const QUALITY = { high: 2, medium: 1.25, low: 0.75 }; // max render pixels per CSS pixel
 
 function showError(e) {
   const b = $('errorbox');
-  b.textContent = 'Error: ' + (e && e.stack ? e.stack : e);
+  const msg = String(e && e.message ? e.message : e);
+  b.textContent = /WebGL2/.test(msg)
+    ? 'Flatlander needs WebGL2, which this browser could not provide. Try a recent Chrome, Edge, Firefox or Safari, and make sure hardware acceleration is turned on.'
+    : 'Error: ' + (e && e.stack ? e.stack : e);
   b.classList.remove('hidden');
 }
 window.addEventListener('error', (e) => showError(e.error || e.message));
@@ -61,6 +68,16 @@ class Game {
     this.bindMenus();
     this.resize();
     addEventListener('resize', () => this.resize());
+    // GPUs can drop the context (driver reset, laptop GPU switch). Rebuild everything when it comes back.
+    this.glc.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.ctxLost = true; });
+    this.glc.addEventListener('webglcontextrestored', () => {
+      try {
+        this.renderer = new Renderer(this.glc, this.renderer.world);
+        this.renderer.resize(this.W, this.H, this.renderScale);
+        this.ctxLost = false;
+      } catch (e) { showError(e); }
+    });
+    if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) $('touchnote').classList.remove('hidden');
     try { this.startDemo(); } catch (e) { showError(e); }
     requestAnimationFrame((t) => this.frame(t));
   }
@@ -98,7 +115,8 @@ class Game {
     const w = new World(DEMO_SEED);
     const sp = w.findSpawn();
     this.demo = { world: w, x: sp[0], y: sp[1], z: sp[2], theta: 0.3 };
-    this.renderer = new Renderer(this.glc, w);
+    if (this.renderer) { this.renderer.world = w; this.renderer.slots.fill(null); } // one GL context for the whole session
+    else this.renderer = new Renderer(this.glc, w);
     this.renderer.resize(this.W, this.H, this.renderScale);
     this.renderer.ensureRegion(sp[0], sp[2]);
     this.dioCam.yaw = 0.3 + Math.PI / 2 + 0.6;
@@ -134,7 +152,7 @@ class Game {
       const p = save.player;
       this.spawn = save.spawn;
       this.player = new Player(p.x, p.y, p.z);
-      this.player.theta = p.theta; this.player.hp = p.hp;
+      this.player.theta = p.theta; this.player.hp = p.hp > 0 ? p.hp : this.player.maxHp;
       this.inv.load(save.inv);
       this.time = save.time;
       this.hintsShown = save.hints || {};
@@ -179,9 +197,12 @@ class Game {
   save(quiet = false) {
     if (!this.running) return;
     const p = this.player;
+    // saving while dead (e.g. closing the tab on the death screen) stores the respawn instead
+    const pl = p.dead ? { x: this.spawn[0], y: this.spawn[1], z: this.spawn[2], theta: p.theta, hp: p.maxHp }
+      : { x: p.x, y: p.y, z: p.z, theta: p.theta, hp: p.hp };
     const data = {
       v: 1, world: this.world.serialize(),
-      player: { x: p.x, y: p.y, z: p.z, theta: p.theta, hp: p.hp },
+      player: pl,
       inv: this.inv.serialize(), time: this.time, spawn: this.spawn, hints: this.hintsShown, sel: this.sel,
       opts: this.opts, splitOn: this.splitOn, stats: this.stats, edu: this.edu.save(),
     };
@@ -192,22 +213,35 @@ class Game {
   // ------------------------------------------------------------ input
   bindInput() {
     addEventListener('keydown', (e) => {
-      if (e.target.tagName === 'INPUT') return;
       const k = e.key.toLowerCase();
+      const el = e.target;
+      if (el.tagName === 'INPUT' && el.type === 'text') { // typing a seed
+        if (k === 'enter' && el.id === 'seedInput') $('btnNew').click();
+        return;
+      }
+      // a checkbox/slider/button clicked in a menu keeps focus; don't let it eat game keys
+      if (/^(INPUT|SELECT|BUTTON)$/.test(el.tagName) && k !== 'escape') {
+        if (!this.running || this.paused) return;
+        el.blur();
+      }
+      // browser shortcuts (Cmd+D, Ctrl+R...) are not game input, and macOS never sends keyup for keys held with Cmd
+      if (e.metaKey || (e.ctrlKey && k !== 'control')) return;
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'tab'].includes(k)) e.preventDefault();
       if (k === 'f3') e.preventDefault();
       this.keys.add(k);
       if (!this.running) return;
       if (k === 'escape') {
-        if (this.ui.isOpen) this.ui.close();
+        if (!$('helpcard').classList.contains('hidden')) $('helpcard').classList.add('hidden');
+        else if (this.ui.isOpen) this.ui.close();
         else if (this.mapOpen) this.toggleMap(false);
         else if (!this.player.dead) this.setPaused(!this.paused);
         return;
       }
-      if (this.paused || this.player.dead) return;
+      if (this.player.dead) { if (k === 'enter') this.respawn(); return; }
+      if (this.paused) return;
       if (k === 'e' || k === 'tab') { if (this.ui.isOpen) this.ui.close(); else this.ui.open(); return; }
       if (this.ui.isOpen) return;
-      if (k >= '1' && k <= '9') { this.selectSlot(+k - 1); }
+      if (/^Digit[1-9]$/.test(e.code)) this.selectSlot(+e.code[5] - 1); // by key position: works with Shift held and on AZERTY
       if (k === 'r') this.snapRotation();
       if (k === 'g') { this.showInset = !this.showInset; }
       if (k === 'm') this.toggleMap();
@@ -217,9 +251,15 @@ class Game {
       if (k === '-' || k === '_') this.scale = Math.max(this.minScale, this.scale / 1.15);
       if (k === 'f3') { this.debug = !this.debug; $('optFps').checked = this.debug; this.saveSettings(); }
       if (k === 'l' && this.split) this.edu.toggle();
-      if (k === 'v' && this.opts.edu) this.setSplit(!this.splitOn);
+      if (k === 'v') {
+        if (this.opts.edu) this.setSplit(!this.splitOn);
+        else this.toastText('The 3D split view is part of Educational mode (pick it when you create a world)');
+      }
     });
-    addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
+    addEventListener('keyup', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === 'meta') this.keys.clear(); else this.keys.delete(k);
+    });
     addEventListener('blur', () => { this.keys.clear(); this.mouse.l = this.mouse.r = false; });
     addEventListener('mousemove', (e) => {
       this.mouse.x = e.clientX; this.mouse.y = e.clientY;
@@ -284,9 +324,9 @@ class Game {
     $('btnResume').onclick = () => this.setPaused(false);
     $('btnSave').onclick = () => this.save();
     $('btnQuit').onclick = () => {
+      if (this.ui.isOpen) this.ui.close(true);
       this.save();
       this.running = false; this.paused = false;
-      if (this.ui.isOpen) this.ui.close();
       this.toggleMap(false);
       $('pause').classList.add('hidden'); $('hud').classList.add('hidden');
       $('menu').classList.remove('hidden');
@@ -311,7 +351,7 @@ class Game {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.running && !this.paused && !this.player.dead) this.setPaused(true);
     });
-    addEventListener('beforeunload', () => { if (this.running) this.save(); });
+    addEventListener('beforeunload', () => { if (this.running) { if (this.ui.isOpen) this.ui.close(true); this.save(true); } });
   }
 
   setSplit(on) {
@@ -323,7 +363,8 @@ class Game {
   setPaused(p) {
     this.paused = p;
     $('pause').classList.toggle('hidden', !p);
-    if (p) { this.mouse.l = this.mouse.r = false; this.save(true); }
+    if (p) { this.mouse.l = this.mouse.r = false; this.keys.clear(); if (this.ui.isOpen) this.ui.close(true); this.save(true); }
+    else document.activeElement?.blur?.();
   }
 
   selectSlot(i) {
@@ -434,11 +475,12 @@ class Game {
     const dt = Math.min(0.05, (t - this.lastT) / 1000);
     this.lastT = t;
     this.fps = this.fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
+    if (this.ctxLost) return;
     try {
       if (!this.running) { if (this.demo) this.drawDemo(dt); return; }
       this.watchPerf(dt);
       if (!this.paused && !this.player.dead) this.update(dt);
-      if (this.player.dead && $('death').classList.contains('hidden')) this.die('You were flattened.');
+      if (this.player.dead && $('death').classList.contains('hidden')) this.die();
       this.draw(dt);
     } catch (e) { showError(e); this.running = false; this.demo = null; }
   }
@@ -466,14 +508,14 @@ class Game {
     if (events.includes('hurt')) { sfx.hurt(); this.shake = 0.2; }
     if (events.includes('jump')) sfx.jump();
     if (!wasWater && p.inWater && p.vy < -4) sfx.splash();
-    if (p.dead) return this.die('You fell or burned.');
+    if (p.dead) return this.die();
     this.camY += (p.y + 1 - this.camY) * Math.min(1, dt * 7);
 
     if (!ui) this.handleMouse(dt); else this.mine = null;
     this.mouse.lPressed = this.mouse.rPressed = false;
 
     this.updateMobs(dt);
-    if (p.dead) return this.die('A phase spider got you.');
+    if (p.dead) return this.die();
     this.updateParticles(dt);
 
     // world streaming
@@ -582,6 +624,7 @@ class Game {
     if (id === B.CHEST) {
       const c = this.world.chests.get(x + ',' + y + ',' + z);
       if (c) for (const s of c) if (s) drops.push([s.id, s.count]);
+      if (!this.inv.canFitAll(drops)) { this.mine = null; this.toastText('No room for everything in that chest'); return; }
     }
     this.world.setBlock(x, y, z, B.AIR);
     for (const [did, n] of drops) this.give(did, n);
@@ -612,6 +655,7 @@ class Game {
   useItem(t) {
     const held = this.held, p = this.player;
     if (held && held.id === I.HEALTH_POTION) {
+      if (!this.mouse.rPressed) return; // one potion per click, even with the button held
       if (p.hp >= p.maxHp) { this.toastText('Already at full health'); return; }
       p.hp = Math.min(p.maxHp, p.hp + 30);
       this.inv.takeFromSlot(this.sel);
@@ -679,7 +723,7 @@ class Game {
             m.attackCd = m.type === 'jelly' ? 1.5 : 1.0;
             const kb = c.u > 0 ? -7 : 7;
             const dmg = Math.round(m.T.dmg * DIFF[this.opts.difficulty].dmg);
-            if (dmg > 0 && p.damage(dmg, kb)) { sfx.hurt(); this.shake = 0.25; this.floater(p.x, p.y + 2, p.z, '-' + dmg, '#ff4040'); }
+            if (dmg > 0 && p.damage(dmg, kb, m.type)) { sfx.hurt(); this.shake = 0.25; this.floater(p.x, p.y + 2, p.z, '-' + dmg, '#ff4040'); }
             break;
           }
         }
@@ -741,12 +785,12 @@ class Game {
     return false;
   }
 
-  die(msg) {
+  die() {
     this.player.dead = true;
-    $('deathmsg').textContent = msg;
+    $('deathmsg').textContent = DEATH_MSG[this.player.lastCause] || 'Something cut through your slice.';
     $('death').classList.remove('hidden');
     this.mouse.l = this.mouse.r = false;
-    if (this.ui.isOpen) this.ui.close();
+    if (this.ui.isOpen) this.ui.close(true);
   }
   respawn() {
     const p = this.player;
@@ -1155,10 +1199,14 @@ class Game {
 
   drawHUD(compass, cartograph, dt) {
     const p = this.player;
-    $('healthfill').style.width = (p.hp / p.maxHp * 100) + '%';
-    $('healthtxt').textContent = Math.ceil(p.hp);
-    const bx = Math.floor(p.x), bz = Math.floor(p.z);
-    $('biome').textContent = BIOME_NAMES[this.world.biomeAt(bx, bz)] + (this.daylight < 0.35 ? ' · night' : '');
+    const hp = Math.ceil(p.hp);
+    if (hp !== this.hudHp) { // DOM writes only on change; this runs every frame
+      this.hudHp = hp;
+      $('healthfill').style.width = (hp / p.maxHp * 100) + '%';
+      $('healthtxt').textContent = hp;
+    }
+    const bio = BIOME_NAMES[this.world.biomeAt(Math.floor(p.x), Math.floor(p.z))] + (this.daylight < 0.35 ? ' · night' : '');
+    if (bio !== this.hudBio) $('biome').textContent = this.hudBio = bio;
 
     // compass
     const cc = $('compass');
