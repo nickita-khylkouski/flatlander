@@ -1,0 +1,13 @@
+{
+  "name": "flatlander",
+  "version": "1.0.0",
+  "description": "A 3D voxel world you can only see one 2D slice of. Rotate your slice to explore, mine and survive.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "lint": "npx --yes eslint@9 src tests scripts"
+  },
+  "license": "MIT"
+}
