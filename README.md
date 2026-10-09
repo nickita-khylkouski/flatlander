@@ -7,7 +7,7 @@
 **A 3D voxel world you can only see one 2D slice of.**
 Turn your slice through the third dimension to explore, mine, craft and survive.
 
-[**▶ Play in your browser**](https://nickita-khylkouski.github.io/flatlander/) · [How it works](#how-it-works) · [Run locally](#run-locally)
+[**▶ Play in your browser**](https://nickitakhy.me/flatlander/) · [How it works](#how-it-works) · [Run locally](#run-locally)
 
 ![WebGL2](https://img.shields.io/badge/WebGL2-shader%20rendered-6a3fd1)
 ![No build step](https://img.shields.io/badge/build%20step-none-2ea44f)
